@@ -221,7 +221,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 16px;
+               font-size: 16px;
             transition: all 0.2s ease;
             user-select: none;
         }
@@ -706,7 +706,7 @@
                     </div>
 
                     <div class="textarea-group">
-                        <label class="textarea-label">Whn do you want to talk to?</label>
+                        <label class="textarea-label">Who do you want to talk to?</label>
                         <textarea id="lookingForInput" placeholder="What kind of conversation are you interested in?"></textarea>
                     </div>
 
@@ -745,14 +745,15 @@
                 </div>
             </div>
         </div>
+    </div>
 
     <script>
-        // ======================= SUPABASE CLIENT ======================
+        // ======================= SUPABASE CLIENT =======================
         const SUPABASE_URL = 'https://pltxbujmfcgiqaixtevo.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsdHhidWptZmNnaXFhaXh0ZXZvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIyMTUwNjEsImV4cCI6MjA4Nzc5MTA2MX0.hqUQg2ZxstWIFSE6keHOeIP6Cpb7yIhjdztgba46T1s';
 
         const { createClient } = window.supabase;
-        const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
         // ======================= STATE =======================
         const state = {
@@ -773,7 +774,7 @@
             isResizing: false
         };
 
-        // =======================DDOM ELEMENTS =======================
+        // ======================= DOM ELEMENTS =======================
         const bubble = document.getElementById('bubble');
         const chatWindow = document.getElementById('chatWindow');
         const windowHeader = document.getElementById('windowHeader');
@@ -948,7 +949,7 @@
 
             try {
                 // Insert user into talky_users
-                const { error: insertError } = await supabase
+                const { error: insertError } = await sb
                     .from('talky_users')
                     .upsert({
                         id: state.userId,
@@ -962,7 +963,7 @@
                 if (insertError) throw insertError;
 
                 // Call match finding RPC
-                const { data, error } = await supabase
+                const { data, error } = await sb
                     .rpc('talky_find_match', { p_user_id: state.userId });
 
                 if (error) throw error;
@@ -972,7 +973,7 @@
                     state.currentMatchUserId = data.matched_user_id;
                     state.matchScore = data.match_score || 0;
 
-                    const { data: matchData, error: matchError } = await supabase
+                    const { data: matchData, error: matchError } = await sb
                         .from('talky_matches')
                         .insert({
                             user_a: state.userId,
@@ -988,7 +989,7 @@
                     state.currentMatchId = matchData.id;
 
                     // Set both users unavailable
-                    await supabase
+                    await sb
                         .from('talky_users')
                         .update({ available: false })
                         .eq('id', state.userId);
@@ -1012,7 +1013,7 @@
                     return;
                 }
 
-                const { data, error } = await supabase
+                const { data, error } = await sb
                     .from('talky_matches')
                     .select('id, user_a, score')
                     .eq('user_b', state.userId)
@@ -1059,7 +1060,7 @@
                 state.messageSubscription.unsubscribe();
             }
 
-            state.messageSubscription = supabase
+            state.messageSubscription = sb
                 .channel(`messages-${state.currentMatchId}`)
                 .on(
                     'postgres_changes',
@@ -1071,7 +1072,7 @@
                     },
                     (payload) => {
                         const message = payload.new;
-                     displayMessage(message);
+                        displayMessage(message);
                     }
                 )
                 .subscribe();
@@ -1109,7 +1110,7 @@
             messageInput.focus();
 
             try {
-                const { error } = await supabase
+                const { error } = await sb
                     .from('talky_messages')
                     .insert({
                         match_id: state.currentMatchId,
@@ -1127,13 +1128,13 @@
         async function endChat() {
             try {
                 // Set match inactive
-                await supabase
+                await sb
                     .from('talky_matches')
                     .update({ active: false })
                     .eq('id', state.currentMatchId);
 
                 // Set user available
-                await supabase
+                await sb
                     .from('talky_users')
                     .update({ available: true })
                     .eq('id', state.userId);
@@ -1173,14 +1174,14 @@
             }
         }
 
-        // ======================= UTIFITR™ FU8UUŽIIASÓ======================
+        // ======================= UTILITY FUNCTIONS =======================
         function escapeHtml(text) {
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
         }
 
-        // ======================== EVENT LISTENERS =======================
+        // ======================= EVENT LISTENERS =======================
         bubble.addEventListener('click', toggleWindow);
         minimizeBtn.addEventListener('click', minimizeWindow);
         closeBtn.addEventListener('click', closeApp);
