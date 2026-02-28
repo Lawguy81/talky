@@ -1,0 +1,1248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Talky - Anonymous Real-Time Chat</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #0f0c29 0%, #1a1633 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #e0e0e0;
+            overflow: hidden;
+        }
+
+        .page-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+            z-index: 9999;
+        }
+
+        .page-message {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            font-size: 14px;
+            color: #a78bfa;
+            opacity: 0.6;
+            z-index: 10000;
+            pointer-events: none;
+        }
+
+        /* Floating Bubble */
+        .floating-bubble {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, #7c3aed 0%, #a78bfa 100%);
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 8px 24px rgba(124, 58, 237, 0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
+            pointer-events: all;
+            z-index: 10001;
+            transition: all 0.3s ease;
+        }
+
+        .floating-bubble:hover {
+            transform: scale(1.1);
+            box-shadow: 0 12px 32px rgba(124, 58, 237, 0.6);
+        }
+
+        .floating-bubble.pulse {
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.05); opacity: 0.9; }
+        }
+
+        .bubble-icon {
+            font-size: 28px;
+            color: white;
+        }
+
+        .unread-badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background: #ef4444;
+            color: white;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+            display: none;
+        }
+
+        .unread-badge.show {
+            display: flex;
+        }
+
+        /* Chat Window */
+        .chat-window {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 400px;
+            height: 600px;
+            background: rgba(15, 12, 41, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(167, 139, 250, 0.3);
+            border-radius: 16px;
+            display: none;
+            flex-direction: column;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            pointer-events: all;
+            z-index: 10002;
+            opacity: 0;
+            transform: scale(0.9);
+            transition: all 0.3s ease;
+        }
+
+        .chat-window.open {
+            display: flex;
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        .chat-window.mobile {
+            width: 100%;
+            height: 100%;
+            max-width: none;
+            bottom: 0;
+            right: 0;
+            border-radius: 0;
+        }
+
+        /* Window Header */
+        .window-header {
+            background: linear-gradient(135deg, rgba(124, 58, 237, 0.2) 0%, rgba(167, 139, 250, 0.1) 100%);
+            border-bottom: 1px solid rgba(167, 139, 250, 0.2);
+            padding: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: grab;
+            user-select: none;
+            border-radius: 16px 16px 0 0;
+            gap: 12px;
+        }
+
+        .window-header:active {
+            cursor: grabbing;
+        }
+
+        .chat-window.mobile .window-header {
+            border-radius: 0;
+        }
+
+        .avatar-section {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex: 1;
+        }
+
+        .pulsing-avatar {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #7c3aed 0%, #a78bfa 100%);
+            border-radius: 50%;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        .status-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .status-text {
+            font-size: 12px;
+            color: #a78bfa;
+            font-weight: 500;
+        }
+
+        .connection-timer {
+            font-size: 11px;
+            color: #7c3aed;
+        }
+
+        .match-badge {
+            background: rgba(167, 139, 250, 0.2);
+            border: 1px solid rgba(167, 139, 250, 0.4);
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 11px;
+            color: #a78bfa;
+            font-weight: 500;
+            white-space: nowrap;
+        }
+
+        .window-controls {
+            display: flex;
+            gap: 8px;
+        }
+
+        .window-btn {
+            background: rgba(167, 139, 250, 0.2);
+            border: 1px solid rgba(167, 139, 250, 0.3);
+            color: #a78bfa;
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            transition: all 0.2s ease;
+            user-select: none;
+        }
+
+        .window-btn:hover {
+            background: rgba(167, 139, 250, 0.3);
+            border-color: rgba(167, 139, 250, 0.5);
+        }
+
+        .window-btn:active {
+            transform: scale(0.95);
+        }
+
+        /* Content Area */
+        .window-content {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* Onboarding Screen */
+        .onboarding {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            padding: 16px;
+            overflow-y: auto;
+        }
+
+        .onboarding.hidden {
+            display: none;
+        }
+
+        .textarea-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .textarea-label {
+            font-size: 13px;
+            color: #a78bfa;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        textarea {
+            background: rgba(167, 139, 250, 0.1);
+            border: 1px solid rgba(167, 139, 250, 0.3);
+            color: #e0e0e0;
+            border-radius: 8px;
+            padding: 10px 12px;
+            font-size: 13px;
+            font-family: inherit;
+            resize: none;
+            min-height: 70px;
+            transition: all 0.2s ease;
+        }
+
+        textarea:focus {
+            outline: none;
+            background: rgba(167, 139, 250, 0.15);
+            border-color: rgba(167, 139, 250, 0.5);
+            box-shadow: 0 0 12px rgba(124, 58, 237, 0.2);
+        }
+
+        .tags-section {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .tags-label {
+            font-size: 12px;
+            color: #a78bfa;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .tags-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+        }
+
+        .tag-chip {
+            background: rgba(167, 139, 250, 0.15);
+            border: 1px solid rgba(167, 139, 250, 0.3);
+            color: #a78bfa;
+            padding: 8px 12px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s ease;
+            user-select: none;
+            text-align: center;
+        }
+
+        .tag-chip:hover {
+            background: rgba(167, 139, 250, 0.25);
+            border-color: rgba(167, 139, 250, 0.5);
+        }
+
+        .tag-chip.selected {
+            background: linear-gradient(135deg, #7c3aed 0%, #a78bfa 100%);
+            border-color: rgba(167, 139, 250, 0.8);
+            color: white;
+        }
+
+        .button-primary {
+            background: linear-gradient(135deg, #7c3aed 0%, #a78bfa 100%);
+            border: none;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            user-select: none;
+            margin-top: 8px;
+        }
+
+        .button-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(124, 58, 237, 0.4);
+        }
+
+        .button-primary:active {
+            transform: translateY(0);
+        }
+
+        .button-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Searching Screen */
+        .searching {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 24px;
+            padding: 32px 16px;
+            text-align: center;
+        }
+
+        .searching.hidden {
+            display: none;
+        }
+
+        .searching-animation {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, #7c3aed 0%, #a78bfa 100%);
+            border-radius: 50%;
+            animation: searching-pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes searching-pulse {
+            0%, 100% { transform: scale(1); opacity: 0.6; }
+            50% { transform: scale(1.2); opacity: 0.3; }
+        }
+
+        .searching-text {
+            font-size: 14px;
+            color: #a78bfa;
+            font-weight: 500;
+        }
+
+        .cancel-btn {
+            background: rgba(167, 139, 250, 0.2);
+            border: 1px solid rgba(167, 139, 250, 0.3);
+            color: #a78bfa;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s ease;
+        }
+
+        .cancel-btn:hover {
+            background: rgba(167, 139, 250, 0.3);
+        }
+
+        /* Chat Screen */
+        .chat-area {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .chat-area.hidden {
+            display: none;
+        }
+
+        .messages-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .message {
+            display: flex;
+            animation: messageSlide 0.3s ease;
+            max-width: 85%;
+        }
+
+        @keyframes messageSlide {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.mine {
+            align-self: flex-end;
+            justify-content: flex-end;
+        }
+
+        .message.theirs {
+            align-self: flex-start;
+            justify-content: flex-start;
+        }
+
+        .message-bubble {
+            background: rgba(167, 139, 250, 0.2);
+            border: 1px solid rgba(167, 139, 250, 0.3);
+            border-radius: 12px;
+            padding: 10px 14px;
+            word-wrap: break-word;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+
+        .message.mine .message-bubble {
+            background: linear-gradient(135deg, #7c3aed 0%, #a78bfa 100%);
+            border-color: rgba(167, 139, 250, 0.5);
+            color: white;
+        }
+
+        .message.theirs .message-bubble {
+            color: #e0e0e0;
+        }
+
+        .message-time {
+            font-size: 11px;
+            color: #7c3aed;
+            margin-top: 4px;
+            opacity: 0.7;
+        }
+
+        /* Input Area */
+        .input-area {
+            padding: 12px 16px;
+            border-top: 1px solid rgba(167, 139, 250, 0.2);
+            display: flex;
+            gap: 8px;
+            background: rgba(15, 12, 41, 0.5);
+        }
+
+        .message-input {
+            flex: 1;
+            background: rgba(167, 139, 250, 0.1);
+            border: 1px solid rgba(167, 139, 250, 0.3);
+            color: #e0e0e0;
+            border-radius: 6px;
+            padding: 8px 12px;
+            font-size: 14px;
+            font-family: inherit;
+            resize: none;
+            max-height: 80px;
+            transition: all 0.2s ease;
+        }
+
+        .message-input:focus {
+            outline: none;
+            background: rgba(167, 139, 250, 0.15);
+            border-color: rgba(167, 139, 250, 0.5);
+        }
+
+        .send-btn {
+            background: linear-gradient(135deg, #7c3aed 0%, #a78bfa 100%);
+            border: none;
+            color: white;
+            width: 36px;
+            height: 36px;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            transition: all 0.2s ease;
+            user-select: none;
+        }
+
+        .send-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(124, 58, 237, 0.4);
+        }
+
+        .send-btn:active {
+            transform: translateY(0);
+        }
+
+        .send-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* End Chat Screen */
+        .end-chat-screen {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 24px;
+            padding: 32px 16px;
+            text-align: center;
+        }
+
+        .end-chat-screen.hidden {
+            display: none;
+        }
+
+        .end-icon {
+            font-size: 48px;
+        }
+
+        .end-text {
+            font-size: 14px;
+            color: #a78bfa;
+            line-height: 1.6;
+        }
+
+        .end-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            width: 100%;
+        }
+
+        .button-secondary {
+            background: rgba(167, 139, 250, 0.2);
+            border: 1px solid rgba(167, 139, 250, 0.3);
+            color: #a78bfa;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+
+        .button-secondary:hover {
+            background: rgba(167, 139, 250, 0.3);
+            border-color: rgba(167, 139, 250, 0.5);
+        }
+
+        /* Scrollbar */
+        .messages-container::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .messages-container::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .messages-container::-webkit-scrollbar-thumb {
+            background: rgba(167, 139, 250, 0.3);
+            border-radius: 3px;
+        }
+
+        .messages-container::-webkit-scrollbar-thumb:hover {
+            background: rgba(167, 139, 250, 0.5);
+        }
+
+        textarea::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        textarea::-webkit-scrollbar-thumb {
+            background: rgba(167, 139, 250, 0.3);
+            border-radius: 2px;
+        }
+
+        /* Resize Handle */
+        .resize-handle {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 20px;
+            height: 20px;
+            cursor: nwse-resize;
+            z-index: 10003;
+        }
+
+        /* Mobile Responsive */
+        @media (max-width: 600px) {
+            .floating-bubble {
+                bottom: 20px;
+                right: 20px;
+                width: 50px;
+                height: 50px;
+            }
+
+            .chat-window {
+                width: 100%;
+                height: 100%;
+                bottom: 0;
+                right: 0;
+                border-radius: 0;
+                max-width: none;
+            }
+
+            .tags-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .message {
+                max-width: 90%;
+            }
+        }
+
+        .page-message {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .page-message::before {
+            content: '💬';
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div class="page-container">
+        <div class="page-message">talky is running</div>
+        <div class="floating-bubble pulse" id="bubble">
+            <span class="bubble-icon">💬</span>
+            <div class="unread-badge" id="unreadBadge">0</div>
+        </div>
+
+        <div class="chat-window" id="chatWindow">
+            <div class="resize-handle" id="resizeHandle"></div>
+
+            <div class="window-header" id="windowHeader">
+                <div class="avatar-section">
+                    <div class="pulsing-avatar"></div>
+                    <div class="status-info">
+                        <div class="status-text" id="statusText">connecting</div>
+                        <div class="connection-timer" id="connectionTimer">0:00</div>
+                    </div>
+                </div>
+                <div class="match-badge" id="matchBadge" style="display: none;"></div>
+                <div class="window-controls">
+                    <button class="window-btn" id="minimizeBtn">−</button>
+                    <button class="window-btn" id="closeBtn">×</button>
+                </div>
+            </div>
+
+            <div class="window-content">
+                <!-- Onboarding Screen -->
+                <div class="onboarding" id="onboardingScreen">
+                    <div class="textarea-group">
+                        <label class="textarea-label">Tell us about yourself</label>
+                        <textarea id="aboutMeInput" placeholder="Your interests, hobbies, what you love..."></textarea>
+                    </div>
+
+                    <div class="textarea-group">
+                        <label class="textarea-label">Whn do you want to talk to?</label>
+                        <textarea id="lookingForInput" placeholder="What kind of conversation are you interested in?"></textarea>
+                    </div>
+
+                    <div class="tags-section">
+                        <div class="tags-label">Quick tags</div>
+                        <div class="tags-grid" id="tagsGrid"></div>
+                    </div>
+
+                    <button class="button-primary" id="findBtn">Find someone to talk to</button>
+                </div>
+
+                <!-- Searching Screen -->
+                <div class="searching" id="searchingScreen">
+                    <div class="searching-animation"></div>
+                    <div class="searching-text">Looking for a match...</div>
+                    <button class="cancel-btn" id="cancelBtn">Cancel</button>
+                </div>
+
+                <!-- Chat Screen -->
+                <div class="chat-area" id="chatArea">
+                    <div class="messages-container" id="messagesContainer"></div>
+                    <div class="input-area">
+                        <input type="text" class="message-input" id="messageInput" placeholder="Type your message...">
+                        <button class="send-btn" id="sendBtn">→</button>
+                    </div>
+                </div>
+
+                <!-- End Chat Screen -->
+                <div class="end-chat-screen" id="endChatScreen">
+                    <div class="end-icon">👋</div>
+                    <div class="end-text">Chat ended. Thanks for the conversation!</div>
+                    <div class="end-buttons">
+                        <button class="button-primary" id="findNewBtn">Find someone new</button>
+                        <button class="button-secondary" id="editInterestsBtn">Edit my interests</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    <script>
+        // ======================= SUPABASE CLIENT ======================
+        const SUPABASE_URL = 'https://pltxbujmfcgiqaixtevo.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsdHhidWptZmNnaXFhaXh0ZXZvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIyMTUwNjEsImV4cCI6MjA4Nzc5MTA2MX0.hqUQg2ZxstWIFSE6keHOeIP6Cpb7yIhjdztgba46T1s';
+
+        const { createClient } = window.supabase;
+        const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        // ======================= STATE =======================
+        const state = {
+            userId: null,
+            currentMatchId: null,
+            currentMatchUserId: null,
+            matchScore: 0,
+            isWindowOpen: false,
+            isMobile: window.innerWidth <= 600,
+            unreadCount: 0,
+            connectionStartTime: null,
+            messageSubscription: null,
+            matchSubscription: null,
+            windowPosition: { x: window.innerWidth - 470, y: window.innerHeight - 660 },
+            windowSize: { width: 400, height: 600 },
+            isDragging: false,
+            dragOffset: { x: 0, y: 0 },
+            isResizing: false
+        };
+
+        // =======================DDOM ELEMENTS =======================
+        const bubble = document.getElementById('bubble');
+        const chatWindow = document.getElementById('chatWindow');
+        const windowHeader = document.getElementById('windowHeader');
+        const onboardingScreen = document.getElementById('onboardingScreen');
+        const searchingScreen = document.getElementById('searchingScreen');
+        const chatArea = document.getElementById('chatArea');
+        const endChatScreen = document.getElementById('endChatScreen');
+        const messagesContainer = document.getElementById('messagesContainer');
+        const messageInput = document.getElementById('messageInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const aboutMeInput = document.getElementById('aboutMeInput');
+        const lookingForInput = document.getElementById('lookingForInput');
+        const tagsGrid = document.getElementById('tagsGrid');
+        const findBtn = document.getElementById('findBtn');
+        const cancelBtn = document.getElementById('cancelBtn');
+        const minimizeBtn = document.getElementById('minimizeBtn');
+        const closeBtn = document.getElementById('closeBtn');
+        const findNewBtn = document.getElementById('findNewBtn');
+        const editInterestsBtn = document.getElementById('editInterestsBtn');
+        const unreadBadge = document.getElementById('unreadBadge');
+        const matchBadge = document.getElementById('matchBadge');
+        const statusText = document.getElementById('statusText');
+        const connectionTimer = document.getElementById('connectionTimer');
+        const resizeHandle = document.getElementById('resizeHandle');
+
+        // ======================= QUICK TAGS =======================
+        const commonTags = [
+            'Gaming', 'Music', 'Travel', 'Sports',
+            'Food', 'Art', 'Tech', 'Books',
+            'Movies', 'Fitness', 'Fashion', 'Nature'
+        ];
+
+        function renderTags() {
+            tagsGrid.innerHTML = commonTags.map(tag =>
+                `<div class="tag-chip" data-tag="${tag}">${tag}</div>`
+            ).join('');
+
+            tagsGrid.querySelectorAll('.tag-chip').forEach(chip => {
+                chip.addEventListener('click', () => {
+                    chip.classList.toggle('selected');
+                });
+            });
+        }
+
+        // ======================= INITIALIZE USER =======================
+        function initializeUser() {
+            let userId = sessionStorage.getItem('talky_user_id');
+            if (!userId) {
+                userId = crypto.randomUUID();
+                sessionStorage.setItem('talky_user_id', userId);
+            }
+            state.userId = userId;
+            renderTags();
+        }
+
+        // ======================= UI STATE MANAGEMENT =======================
+        function showScreen(screenId) {
+            onboardingScreen.classList.add('hidden');
+            searchingScreen.classList.add('hidden');
+            chatArea.classList.add('hidden');
+            endChatScreen.classList.add('hidden');
+
+            if (screenId === 'onboarding') {
+                onboardingScreen.classList.remove('hidden');
+            } else if (screenId === 'searching') {
+                searchingScreen.classList.remove('hidden');
+            } else if (screenId === 'chat') {
+                chatArea.classList.remove('hidden');
+            } else if (screenId === 'endChat') {
+                endChatScreen.classList.remove('hidden');
+            }
+        }
+
+        function toggleWindow() {
+            state.isWindowOpen = !state.isWindowOpen;
+            chatWindow.classList.toggle('open');
+            bubble.classList.toggle('pulse', !state.isWindowOpen);
+
+            if (state.isWindowOpen) {
+                setWindowPosition();
+            }
+        }
+
+        function minimizeWindow() {
+            state.isWindowOpen = false;
+            chatWindow.classList.remove('open');
+            bubble.classList.add('pulse');
+        }
+
+        function closeApp() {
+            minimizeWindow();
+            endConnection();
+        }
+
+        // ======================= WINDOW DRAGGING & RESIZING =======================
+        function setWindowPosition() {
+            chatWindow.style.right = state.windowPosition.x + 'px';
+            chatWindow.style.bottom = state.windowPosition.y + 'px';
+        }
+
+        windowHeader.addEventListener('mousedown', (e) => {
+            if (e.target.closest('.window-controls')) return;
+            state.isDragging = true;
+            const rect = chatWindow.getBoundingClientRect();
+            state.dragOffset.x = e.clientX - rect.left;
+            state.dragOffset.y = e.clientY - rect.top;
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!state.isDragging) return;
+
+            const x = e.clientX - state.dragOffset.x;
+            const y = e.clientY - state.dragOffset.y;
+
+            chatWindow.style.right = 'auto';
+            chatWindow.style.bottom = 'auto';
+            chatWindow.style.left = x + 'px';
+            chatWindow.style.top = y + 'px';
+        });
+
+        document.addEventListener('mouseup', () => {
+            state.isDragging = false;
+        });
+
+        resizeHandle.addEventListener('mousedown', (e) => {
+            state.isResizing = true;
+            const startWidth = state.windowSize.width;
+            const startHeight = state.windowSize.height;
+            const startX = e.clientX;
+            const startY = e.clientY;
+
+            const handleMove = (e) => {
+                const deltaX = e.clientX - startX;
+                const deltaY = e.clientY - startY;
+                state.windowSize.width = Math.max(300, startWidth + deltaX);
+                state.windowSize.height = Math.max(400, startHeight + deltaY);
+                chatWindow.style.width = state.windowSize.width + 'px';
+                chatWindow.style.height = state.windowSize.height + 'px';
+            };
+
+            const handleUp = () => {
+                state.isResizing = false;
+                document.removeEventListener('mousemove', handleMove);
+                document.removeEventListener('mouseup', handleUp);
+            };
+
+            document.addEventListener('mousemove', handleMove);
+            document.addEventListener('mouseup', handleUp);
+        });
+
+        // ======================= MATCHING LOGIC =======================
+        async function findMatch() {
+            const aboutMe = aboutMeInput.value.trim();
+            const lookingFor = lookingForInput.value.trim();
+
+            if (!aboutMe || !lookingFor) {
+                alert('Please fill in both fields');
+                return;
+            }
+
+            // Get selected tags
+            const selectedTags = Array.from(document.querySelectorAll('.tag-chip.selected'))
+                .map(chip => chip.dataset.tag);
+
+            const keywords = [...new Set([
+                ...aboutMe.toLowerCase().split(/\s+/),
+                ...lookingFor.toLowerCase().split(/\s+/),
+                ...selectedTags.map(t => t.toLowerCase())
+            ])];
+
+            showScreen('searching');
+
+            try {
+                // Insert user into talky_users
+                const { error: insertError } = await supabase
+                    .from('talky_users')
+                    .upsert({
+                        id: state.userId,
+                        about_me: aboutMe,
+                        looking_for: lookingFor,
+                        keywords: keywords,
+                        available: true,
+                        last_seen: new Date().toISOString()
+                    }, { onConflict: 'id' });
+
+                if (insertError) throw insertError;
+
+                // Call match finding RPC
+                const { data, error } = await supabase
+                    .rpc('talky_find_match', { p_user_id: state.userId });
+
+                if (error) throw error;
+
+                if (data && data.matched_user_id) {
+                    // Match found
+                    state.currentMatchUserId = data.matched_user_id;
+                    state.matchScore = data.match_score || 0;
+
+                    const { data: matchData, error: matchError } = await supabase
+                        .from('talky_matches')
+                        .insert({
+                            user_a: state.userId,
+                            user_b: data.matched_user_id,
+                            score: data.match_score || 0,
+                            active: true
+                        })
+                        .select()
+                        .single();
+
+                    if (matchError) throw matchError;
+
+                    state.currentMatchId = matchData.id;
+
+                    // Set both users unavailable
+                    await supabase
+                        .from('talky_users')
+                        .update({ available: false })
+                        .eq('id', state.userId);
+
+                    startChat();
+                } else {
+                    // No match found, poll for incoming matches
+                    pollForMatch();
+                }
+            } catch (error) {
+                console.error('Match error:', error);
+                alert('Error finding match: ' + error.message);
+                showScreen('onboarding');
+            }
+        }
+
+        async function pollForMatch() {
+            const pollInterval = setInterval(async () => {
+                if (!state.isWindowOpen || state.currentMatchId) {
+                    clearInterval(pollInterval);
+                    return;
+                }
+
+                const { data, error } = await supabase
+                    .from('talky_matches')
+                    .select('id, user_a, score')
+                    .eq('user_b', state.userId)
+                    .eq('active', true)
+                    .single();
+
+                if (data) {
+                    clearInterval(pollInterval);
+                    state.currentMatchId = data.id;
+                    state.currentMatchUserId = data.user_a;
+                    state.matchScore = data.score || 0;
+                    startChat();
+                }
+            }, 3000);
+
+            // Store interval ID to clear later if needed
+            state.pollInterval = pollInterval;
+        }
+
+        function startChat() {
+            state.connectionStartTime = Date.now();
+            matchBadge.textContent = `${Math.round(state.matchScore * 100)}% match`;
+            matchBadge.style.display = 'block';
+            statusText.textContent = 'connected';
+            updateConnectionTimer();
+            state.timerInterval = setInterval(updateConnectionTimer, 1000);
+
+            subscribeToMessages();
+            showScreen('chat');
+            messagesContainer.innerHTML = '';
+            messageInput.focus();
+        }
+
+        function updateConnectionTimer() {
+            if (!state.connectionStartTime) return;
+            const elapsed = Math.floor((Date.now() - state.connectionStartTime) / 1000);
+            const minutes = Math.floor(elapsed / 60);
+            const seconds = elapsed % 60;
+            connectionTimer.textContent = `${minutes}:${String(seconds).padStart(2, '0')}`;
+        }
+
+        function subscribeToMessages() {
+            if (state.messageSubscription) {
+                state.messageSubscription.unsubscribe();
+            }
+
+            state.messageSubscription = supabase
+                .channel(`messages-${state.currentMatchId}`)
+                .on(
+                    'postgres_changes',
+                    {
+                        event: 'INSERT',
+                        schema: 'public',
+                        table: 'talky_messages',
+                        filter: `match_id=eq.${state.currentMatchId}`
+                    },
+                    (payload) => {
+                        const message = payload.new;
+                     displayMessage(message);
+                    }
+                )
+                .subscribe();
+        }
+
+        function displayMessage(message) {
+            const isMine = message.sender_id === state.userId;
+            const messageEl = document.createElement('div');
+            messageEl.className = `message ${isMine ? 'mine' : 'theirs'}`;
+
+            const time = new Date(message.created_at);
+            const timeStr = time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+
+            messageEl.innerHTML = `
+                <div>
+                    <div class="message-bubble">${escapeHtml(message.text)}</div>
+                    <div class="message-time">${timeStr}</div>
+                </div>
+            `;
+
+            messagesContainer.appendChild(messageEl);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+            if (!isMine) {
+                state.unreadCount++;
+                updateUnreadBadge();
+            }
+        }
+
+        async function sendMessage() {
+            const text = messageInput.value.trim();
+            if (!text) return;
+
+            messageInput.value = '';
+            messageInput.focus();
+
+            try {
+                const { error } = await supabase
+                    .from('talky_messages')
+                    .insert({
+                        match_id: state.currentMatchId,
+                        sender_id: state.userId,
+                        text: text
+                    });
+
+                if (error) throw error;
+            } catch (error) {
+                console.error('Send error:', error);
+                messageInput.value = text;
+            }
+        }
+
+        async function endChat() {
+            try {
+                // Set match inactive
+                await supabase
+                    .from('talky_matches')
+                    .update({ active: false })
+                    .eq('id', state.currentMatchId);
+
+                // Set user available
+                await supabase
+                    .from('talky_users')
+                    .update({ available: true })
+                    .eq('id', state.userId);
+
+                endConnection();
+                showScreen('endChat');
+            } catch (error) {
+                console.error('End chat error:', error);
+            }
+        }
+
+        function endConnection() {
+            state.currentMatchId = null;
+            state.currentMatchUserId = null;
+            state.unreadCount = 0;
+            updateUnreadBadge();
+            matchBadge.style.display = 'none';
+            statusText.textContent = 'ready';
+
+            if (state.timerInterval) {
+                clearInterval(state.timerInterval);
+            }
+            if (state.messageSubscription) {
+                state.messageSubscription.unsubscribe();
+            }
+            if (state.pollInterval) {
+                clearInterval(state.pollInterval);
+            }
+        }
+
+        function updateUnreadBadge() {
+            if (state.unreadCount > 0) {
+                unreadBadge.classList.add('show');
+                unreadBadge.textContent = state.unreadCount > 9 ? '9+' : state.unreadCount;
+            } else {
+                unreadBadge.classList.remove('show');
+            }
+        }
+
+        // ======================= UTIFITR� FU8UU�IIAS�======================
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // ======================== EVENT LISTENERS =======================
+        bubble.addEventListener('click', toggleWindow);
+        minimizeBtn.addEventListener('click', minimizeWindow);
+        closeBtn.addEventListener('click', closeApp);
+        findBtn.addEventListener('click', findMatch);
+        cancelBtn.addEventListener('click', () => {
+            endConnection();
+            showScreen('onboarding');
+        });
+        findNewBtn.addEventListener('click', () => {
+            showScreen('onboarding');
+        });
+        editInterestsBtn.addEventListener('click', () => {
+            showScreen('onboarding');
+        });
+        sendBtn.addEventListener('click', sendMessage);
+
+        messageInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        // Auto-focus on window open
+        bubble.addEventListener('click', () => {
+            setTimeout(() => {
+                if (state.isWindowOpen && chatArea.classList.contains('hidden')) {
+                    aboutMeInput.focus();
+                } else if (state.isWindowOpen && !chatArea.classList.contains('hidden')) {
+                    messageInput.focus();
+                }
+            }, 300);
+        });
+
+        // Handle window close/refresh
+        window.addEventListener('beforeunload', () => {
+            if (state.userId && state.currentMatchId) {
+                navigator.sendBeacon(`${SUPABASE_URL}/rest/v1/talky_users?id=eq.${state.userId}`,
+                    JSON.stringify({ available: false }));
+            }
+        });
+
+        // Mobile detection and responsive adjustments
+        window.addEventListener('resize', () => {
+            state.isMobile = window.innerWidth <= 600;
+            if (state.isMobile && state.isWindowOpen) {
+                chatWindow.classList.add('mobile');
+            } else {
+                chatWindow.classList.remove('mobile');
+            }
+        });
+
+        // ======================= INITIALIZATION =======================
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeUser();
+            showScreen('onboarding');
+            statusText.textContent = 'ready';
+
+            if (state.isMobile && state.isWindowOpen) {
+                chatWindow.classList.add('mobile');
+            }
+        });
+    </script>
+</body>
+</html>
