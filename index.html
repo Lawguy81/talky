@@ -583,19 +583,20 @@
         }
 
         .report-btn {
-            background: none;
-            border: 1px solid rgba(239,68,68,0.3);
-            color: rgba(239,68,68,0.7);
-            font-size: 11px;
-            padding: 4px 10px;
-            border-radius: 12px;
+            background: transparent;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: #ef4444;
+            padding: 6px 10px;
+            border-radius: 6px;
             cursor: pointer;
+            font-size: 11px;
+            font-weight: 500;
             transition: all 0.2s;
+            white-space: nowrap;
         }
         .report-btn:hover {
-            background: rgba(239,68,68,0.1);
-            color: #ef4444;
-            border-color: #ef4444;
+            background: rgba(239, 68, 68, 0.15);
+            border-color: rgba(239, 68, 68, 0.5);
         }
         .report-btn.reported {
             background: rgba(239,68,68,0.1);
@@ -788,7 +789,6 @@
                 </div>
                 <div class="match-badge" id="matchBadge" style="display: none;"></div>
                 <div class="window-controls">
-                    <button class="report-btn" id="reportBtn">report</button>
                     <button class="window-btn" id="minimizeBtn">&minus;</button>
                     <button class="window-btn" id="closeBtn">&times;</button>
                 </div>
@@ -828,6 +828,7 @@
                     <div class="input-area">
                         <input type="text" class="message-input" id="messageInput" placeholder="Type your message...">
                         <button class="send-btn" id="sendBtn">&rarr;</button>
+                        <button class="report-btn" id="reportBtn" style="display:none">report</button>
                     </div>
                 </div>
 
@@ -1174,6 +1175,7 @@
             subscribeToMessages();
             startHeartbeat();
             showScreen('chat');
+            document.getElementById('reportBtn').style.display = '';
             messagesContainer.innerHTML = '';
             const welcomeMsgs = [
                 'keep it talky, not toxic.',
@@ -1329,6 +1331,7 @@
             if (state.aiTimeout) { clearTimeout(state.aiTimeout); state.aiTimeout = null; }
             updateUnreadBadge();
             matchBadge.style.display = 'none';
+            document.getElementById('reportBtn').style.display = 'none';
             statusText.textContent = 'ready';
             statusText.style.color = '';
             messageInput.disabled = false;
