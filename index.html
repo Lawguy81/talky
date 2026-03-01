@@ -695,6 +695,16 @@
             .message {
                 max-width: 90%;
             }
+
+            .input-area {
+                padding: 10px 12px;
+                padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+            }
+
+            .message-input {
+                font-size: 16px;
+                min-width: 0;
+            }
         }
 
         .page-message {
@@ -1020,7 +1030,7 @@
 
                 if (error) throw error;
 
-                // RPC returns an array ÃÂ¢ÃÂÃÂ grab first result
+                // RPC returns an array ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ grab first result
                 const match = Array.isArray(data) ? data[0] : data;
 
                 if (match && match.matched_user_id) {
