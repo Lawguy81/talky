@@ -42,7 +42,34 @@
             opacity: 0.6;
             z-index: 10000;
             pointer-events: none;
+            display: none;
         }
+
+        /* Landing Page */
+        .landing {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 24px;
+            z-index: 1;
+        }
+        .landing-logo { font-size: 64px; margin-bottom: 8px; animation: float 3s ease-in-out infinite; }
+        @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+        .landing-title { font-size: 48px; font-weight: 800; background: linear-gradient(135deg, #a78bfa 0%, #c4b5fd 50%, #7c3aed 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; margin-bottom: 12px; letter-spacing: -1px; }
+        .landing-tagline { font-size: 20px; color: #c4b5fd; margin-bottom: 8px; font-weight: 300; }
+        .landing-sub { font-size: 15px; color: rgba(167, 139, 250, 0.5); margin-bottom: 40px; max-width: 400px; line-height: 1.5; }
+        .landing-cta { background: linear-gradient(135deg, #7c3aed 0%, #a78bfa 100%); color: white; border: none; padding: 16px 40px; font-size: 18px; font-weight: 600; border-radius: 50px; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 8px 30px rgba(124, 58, 237, 0.4); pointer-events: all; }
+        .landing-cta:hover { transform: translateY(-2px); box-shadow: 0 12px 40px rgba(124, 58, 237, 0.6); }
+        .landing-cta:active { transform: translateY(0); }
+        .landing-features { display: flex; gap: 32px; margin-top: 48px; flex-wrap: wrap; justify-content: center; }
+        .landing-feature { display: flex; flex-direction: column; align-items: center; gap: 6px; opacity: 0.6; }
+        .landing-feature-icon { font-size: 24px; }
+        .landing-feature-text { font-size: 13px; color: #a78bfa; }
+        @media (max-width: 600px) { .landing-title { font-size: 36px; } .landing-tagline { font-size: 17px; } .landing-features { gap: 24px; } }
 
         /* Floating Bubble */
         .floating-bubble {
@@ -683,6 +710,20 @@
     </style>
 </head>
 <body>
+    <!-- Landing Page -->
+    <div class="landing" id="landing">
+        <div class="landing-logo">💬</div>
+        <div class="landing-title">talky</div>
+        <div class="landing-tagline">Anonymous chats with real people.</div>
+        <div class="landing-sub">Share your interests, get matched with someone who vibes with you. No accounts, no history, just conversation.</div>
+        <button class="landing-cta" id="landingCta">Start Talking</button>
+        <div class="landing-features">
+            <div class="landing-feature"><span class="landing-feature-icon">🎭</span><span class="landing-feature-text">100% Anonymous</span></div>
+            <div class="landing-feature"><span class="landing-feature-icon">⚡</span><span class="landing-feature-text">Instant Match</span></div>
+            <div class="landing-feature"><span class="landing-feature-icon">🎯</span><span class="landing-feature-text">Interest-Based</span></div>
+        </div>
+    </div>
+
     <div class="page-container">
         <div class="page-message">talky is running</div>
         <div class="floating-bubble pulse" id="bubble">
@@ -1193,6 +1234,13 @@
         }
 
         // ======================= EVENT LISTENERS =======================
+        const landingCta = document.getElementById('landingCta');
+        const landing = document.getElementById('landing');
+        landingCta.addEventListener('click', () => {
+            landing.style.display = 'none';
+            toggleWindow();
+            setTimeout(() => aboutMeInput.focus(), 300);
+        });
         bubble.addEventListener('click', toggleWindow);
         minimizeBtn.addEventListener('click', minimizeWindow);
         closeBtn.addEventListener('click', closeApp);
