@@ -1039,7 +1039,7 @@
 
                 if (error) throw error;
 
-                // RPC returns an array ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ grab first result
+                // RPC returns an array ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ grab first result
                 const match = Array.isArray(data) ? data[0] : data;
 
                 if (match && match.matched_user_id) {
@@ -1107,7 +1107,7 @@
             state.pollInterval = pollInterval;
         }
 
-        function startChat() {
+        async function startChat() {
             state.connectionStartTime = Date.now();
             state.matchIsOnline = true;
             matchBadge.textContent = `${Math.round(state.matchScore * 100)}% vibe`;
@@ -1120,6 +1120,11 @@
             messageInput.disabled = false;
             messageInput.placeholder = 'Type your message...';
             sendBtn.disabled = false;
+
+            // Refresh last_seen for both users so presence check doesn't false-trigger
+            await sb.from('talky_users')
+                .update({ last_seen: new Date().toISOString() })
+                .eq('id', state.userId);
 
             subscribeToMessages();
             startHeartbeat();
@@ -1270,7 +1275,12 @@
         function startHeartbeat() {
             sendHeartbeat();
             state.heartbeatInterval = setInterval(sendHeartbeat, 5000);
-            state.presenceInterval = setInterval(checkMatchPresence, 6000);
+            // Delay presence monitoring by 15s so heartbeats have time to establish
+            setTimeout(() => {
+                if (state.currentMatchId) {
+                    state.presenceInterval = setInterval(checkMatchPresence, 8000);
+                }
+            }, 15000);
         }
 
         async function sendHeartbeat() {
@@ -1297,7 +1307,7 @@
 
                 if (staleSecs > 20) {
                     handleMatchLeft();
-                } else if (staleSecs > 10) {
+                } else if (staleSecs > 45) {
                     if (state.matchIsOnline) {
                         state.matchIsOnline = false;
                         statusText.textContent = 'they may have left...';
@@ -1364,7 +1374,7 @@
                     .eq('id', state.currentMatchUserId).single();
                 if (error || !data) { handleMatchLeft(); return; }
                 const staleSecs = Math.floor((Date.now() - new Date(data.last_seen).getTime()) / 1000);
-                if (staleSecs > 20) { handleMatchLeft(); }
+                if (staleSecs > 90) { handleMatchLeft(); }
                 else if (staleSecs > 10) {
                     if (state.matchIsOnline) {
                         state.matchIsOnline = false;
