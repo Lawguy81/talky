@@ -833,7 +833,10 @@
             windowSize: { width: 400, height: 600 },
             isDragging: false,
             dragOffset: { x: 0, y: 0 },
-            isResizing: false
+            isResizing: false,
+            heartbeatInterval: null,
+            presenceInterval: null,
+            matchIsOnline: true
         };
 
         // ======================= DOM ELEMENTS =======================
@@ -1030,7 +1033,7 @@
 
                 if (error) throw error;
 
-                // RPC returns an array ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ grab first result
+                // RPC returns an array ÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ grab first result
                 const match = Array.isArray(data) ? data[0] : data;
 
                 if (match && match.matched_user_id) {
@@ -1100,16 +1103,29 @@
 
         function startChat() {
             state.connectionStartTime = Date.now();
+            state.matchIsOnline = true;
             matchBadge.textContent = `${Math.round(state.matchScore * 100)}% vibe`;
             matchBadge.style.display = 'block';
             statusText.textContent = 'matched! say hi';
+            statusText.style.color = '';
             updateConnectionTimer();
             state.timerInterval = setInterval(updateConnectionTimer, 1000);
 
+            messageInput.disabled = false;
+            messageInput.placeholder = 'Type your message...';
+            sendBtn.disabled = false;
+
             subscribeToMessages();
+            startHeartbeat();
             showScreen('chat');
             messagesContainer.innerHTML = '';
             messageInput.focus();
+
+            setTimeout(() => {
+                if (state.currentMatchId && state.matchIsOnline) {
+                    statusText.textContent = 'chatting';
+                }
+            }, 5000);
         }
 
         function updateConnectionTimer() {
@@ -1192,17 +1208,16 @@
 
         async function endChat() {
             try {
-                // Set match inactive
+                stopHeartbeat();
+
+                await sb.from('talky_users')
+                    .update({ last_seen: '2000-01-01T00:00:00Z', available: true })
+                    .eq('id', state.userId);
+
                 await sb
                     .from('talky_matches')
                     .update({ active: false })
                     .eq('id', state.currentMatchId);
-
-                // Set user available
-                await sb
-                    .from('talky_users')
-                    .update({ available: true })
-                    .eq('id', state.userId);
 
                 endConnection();
                 showScreen('endChat');
@@ -1215,9 +1230,15 @@
             state.currentMatchId = null;
             state.currentMatchUserId = null;
             state.unreadCount = 0;
+            state.matchIsOnline = true;
             updateUnreadBadge();
             matchBadge.style.display = 'none';
             statusText.textContent = 'ready';
+            statusText.style.color = '';
+            messageInput.disabled = false;
+            messageInput.placeholder = 'Type your message...';
+            sendBtn.disabled = false;
+            stopHeartbeat();
 
             if (state.timerInterval) {
                 clearInterval(state.timerInterval);
@@ -1237,6 +1258,80 @@
             } else {
                 unreadBadge.classList.remove('show');
             }
+        }
+
+        // ======================= PRESENCE / HEARTBEAT =======================
+        function startHeartbeat() {
+            sendHeartbeat();
+            state.heartbeatInterval = setInterval(sendHeartbeat, 5000);
+            state.presenceInterval = setInterval(checkMatchPresence, 6000);
+        }
+
+        async function sendHeartbeat() {
+            if (!state.userId || !state.currentMatchId) return;
+            try {
+                await sb.from('talky_users')
+                    .update({ last_seen: new Date().toISOString() })
+                    .eq('id', state.userId);
+            } catch (e) { console.error('Heartbeat error:', e); }
+        }
+
+        async function checkMatchPresence() {
+            if (!state.currentMatchUserId || !state.currentMatchId) return;
+            try {
+                const { data, error } = await sb
+                    .from('talky_users')
+                    .select('last_seen')
+                    .eq('id', state.currentMatchUserId)
+                    .single();
+
+                if (error || !data) { handleMatchLeft(); return; }
+
+                const staleSecs = Math.floor((Date.now() - new Date(data.last_seen).getTime()) / 1000);
+
+                if (staleSecs > 20) {
+                    handleMatchLeft();
+                } else if (staleSecs > 10) {
+                    if (state.matchIsOnline) {
+                        state.matchIsOnline = false;
+                        statusText.textContent = 'they may have left...';
+                        statusText.style.color = '#f59e0b';
+                    }
+                } else {
+                    if (!state.matchIsOnline) {
+                        state.matchIsOnline = true;
+                        statusText.textContent = 'chatting';
+                        statusText.style.color = '';
+                    }
+                }
+            } catch (e) { console.error('Presence check error:', e); }
+        }
+
+        function handleMatchLeft() {
+            if (!state.currentMatchId) return;
+            stopHeartbeat();
+
+            const msgEl = document.createElement('div');
+            msgEl.className = 'message system';
+            msgEl.innerHTML = '<div><div class="message-bubble" style="background: rgba(245,158,11,0.2); color: #f59e0b; text-align: center; font-style: italic;">Your match has left the chat</div></div>';
+            messagesContainer.appendChild(msgEl);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+            statusText.textContent = 'they left';
+            statusText.style.color = '#ef4444';
+            messageInput.disabled = true;
+            messageInput.placeholder = 'Chat ended';
+            sendBtn.disabled = true;
+
+            sb.from('talky_matches').update({ active: false }).eq('id', state.currentMatchId);
+            sb.from('talky_users').update({ available: true }).eq('id', state.userId);
+
+            setTimeout(() => { endConnection(); showScreen('endChat'); }, 3000);
+        }
+
+        function stopHeartbeat() {
+            if (state.heartbeatInterval) { clearInterval(state.heartbeatInterval); state.heartbeatInterval = null; }
+            if (state.presenceInterval) { clearInterval(state.presenceInterval); state.presenceInterval = null; }
         }
 
         // ======================= UTILITY FUNCTIONS =======================
@@ -1290,9 +1385,24 @@
 
         // Handle window close/refresh
         window.addEventListener('beforeunload', () => {
-            if (state.userId && state.currentMatchId) {
-                navigator.sendBeacon(`${SUPABASE_URL}/rest/v1/talky_users?id=eq.${state.userId}`,
-                    JSON.stringify({ available: false }));
+            if (state.userId) {
+                const patchOpts = (body) => ({
+                    method: 'PATCH',
+                    headers: {
+                        'apikey': SUPABASE_ANON_KEY,
+                        'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+                        'Content-Type': 'application/json',
+                        'Prefer': 'return=minimal'
+                    },
+                    body: JSON.stringify(body),
+                    keepalive: true
+                });
+                fetch(SUPABASE_URL + '/rest/v1/talky_users?id=eq.' + state.userId,
+                    patchOpts({ last_seen: '2000-01-01T00:00:00Z', available: false }));
+                if (state.currentMatchId) {
+                    fetch(SUPABASE_URL + '/rest/v1/talky_matches?id=eq.' + state.currentMatchId,
+                        patchOpts({ active: false }));
+                }
             }
         });
 
