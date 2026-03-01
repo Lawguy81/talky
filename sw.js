@@ -1,4 +1,4 @@
-const CACHE_NAME = 'talky-v1';
+const CACHE_NAME = 'talky-v2';
 const ASSETS = ['/', '/index.html', '/manifest.json'];
 
 self.addEventListener('install', (e) => {
@@ -18,7 +18,6 @@ self.addEventListener('activate', (e) => {
 });
 
 self.addEventListener('fetch', (e) => {
-  // Network-first for API calls, cache-first for static assets
   if (e.request.url.includes('supabase.co') || e.request.method !== 'GET') {
     return;
   }
