@@ -704,7 +704,7 @@
         }
 
         .page-message::before {
-            content: 'Ã°ÂÂÂ¬';
+            content: '\1F4AC';
             font-size: 16px;
         }
     </style>
@@ -712,22 +712,22 @@
 <body>
     <!-- Landing Page -->
     <div class="landing" id="landing">
-        <div class="landing-logo">Ã°ÂÂÂ¬</div>
+        <div class="landing-logo">&#x1F4AC;</div>
         <div class="landing-title">talky</div>
         <div class="landing-tagline">Anonymous chats with real people.</div>
         <div class="landing-sub">Share your interests, get matched with someone who vibes with you. No accounts, no history, just conversation.</div>
         <button class="landing-cta" id="landingCta">Start Talking</button>
         <div class="landing-features">
-            <div class="landing-feature"><span class="landing-feature-icon">Ã°ÂÂÂ­</span><span class="landing-feature-text">100% Anonymous</span></div>
-            <div class="landing-feature"><span class="landing-feature-icon">Ã¢ÂÂ¡</span><span class="landing-feature-text">Instant Match</span></div>
-            <div class="landing-feature"><span class="landing-feature-icon">Ã°ÂÂÂ¯</span><span class="landing-feature-text">Interest-Based</span></div>
+            <div class="landing-feature"><span class="landing-feature-icon">&#x1F3AD;</span><span class="landing-feature-text">100% Anonymous</span></div>
+            <div class="landing-feature"><span class="landing-feature-icon">&#x26A1;</span><span class="landing-feature-text">Instant Match</span></div>
+            <div class="landing-feature"><span class="landing-feature-icon">&#x1F3AF;</span><span class="landing-feature-text">Interest-Based</span></div>
         </div>
     </div>
 
     <div class="page-container">
         <div class="page-message">talky is running</div>
         <div class="floating-bubble pulse" id="bubble">
-            <span class="bubble-icon">Ã°ÂÂÂ¬</span>
+            <span class="bubble-icon">&#x1F4AC;</span>
             <div class="unread-badge" id="unreadBadge">0</div>
         </div>
 
@@ -744,8 +744,8 @@
                 </div>
                 <div class="match-badge" id="matchBadge" style="display: none;"></div>
                 <div class="window-controls">
-                    <button class="window-btn" id="minimizeBtn">Ã¢ÂÂ</button>
-                    <button class="window-btn" id="closeBtn">ÃÂ</button>
+                    <button class="window-btn" id="minimizeBtn">&minus;</button>
+                    <button class="window-btn" id="closeBtn">&times;</button>
                 </div>
             </div>
 
@@ -782,13 +782,13 @@
                     <div class="messages-container" id="messagesContainer"></div>
                     <div class="input-area">
                         <input type="text" class="message-input" id="messageInput" placeholder="Type your message...">
-                        <button class="send-btn" id="sendBtn">Ã¢ÂÂ</button>
+                        <button class="send-btn" id="sendBtn">&rarr;</button>
                     </div>
                 </div>
 
                 <!-- End Chat Screen -->
                 <div class="end-chat-screen" id="endChatScreen">
-                    <div class="end-icon">Ã°ÂÂÂ</div>
+                    <div class="end-icon">&#x1F44B;</div>
                     <div class="end-text">Chat ended. Thanks for the conversation!</div>
                     <div class="end-buttons">
                         <button class="button-primary" id="findNewBtn">Find someone new</button>
@@ -1020,7 +1020,7 @@
 
                 if (error) throw error;
 
-                // RPC returns an array â grab first result
+                // RPC returns an array Ã¢ÂÂ grab first result
                 const match = Array.isArray(data) ? data[0] : data;
 
                 if (match && match.matched_user_id) {
