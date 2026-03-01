@@ -842,7 +842,9 @@
             isResizing: false,
             heartbeatInterval: null,
             presenceInterval: null,
-            matchIsOnline: true
+            matchIsOnline: true,
+            isAiChat: false,
+            aiTimeout: null
         };
 
         // ======================= DOM ELEMENTS =======================
@@ -1039,11 +1041,12 @@
 
                 if (error) throw error;
 
-                // RPC returns an array ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ grab first result
+                // RPC returns an array ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ grab first result
                 const match = Array.isArray(data) ? data[0] : data;
 
                 if (match && match.matched_user_id) {
-                    // Match found
+                    // Match found - clear AI timeout
+                    if (state.aiTimeout) { clearTimeout(state.aiTimeout); state.aiTimeout = null; }
                     state.currentMatchUserId = match.matched_user_id;
                     state.matchScore = match.match_score || 0;
 
@@ -1072,6 +1075,13 @@
                 } else {
                     // No match found, poll for incoming matches
                     pollForMatch();
+                    // If no real match in 12s, start AI chat
+                    state.aiTimeout = setTimeout(() => {
+                        if (!state.currentMatchId || state.currentMatchId === null) {
+                            if (state.pollInterval) clearInterval(state.pollInterval);
+                            startAiChat();
+                        }
+                    }, 12000);
                 }
             } catch (error) {
                 console.error('Match error:', error);
@@ -1096,6 +1106,7 @@
 
                 if (data) {
                     clearInterval(pollInterval);
+                    if (state.aiTimeout) { clearTimeout(state.aiTimeout); state.aiTimeout = null; }
                     state.currentMatchId = data.id;
                     state.currentMatchUserId = data.user_a;
                     state.matchScore = data.score || 0;
@@ -1201,6 +1212,17 @@
             messageInput.value = '';
             messageInput.focus();
 
+            if (state.isAiChat) {
+                // AI chat - display locally and get AI response
+                displayMessage({
+                    sender_id: state.userId,
+                    text: text,
+                    created_at: new Date().toISOString()
+                });
+                handleAiResponse(text);
+                return;
+            }
+
             try {
                 const { error } = await sb
                     .from('talky_messages')
@@ -1242,6 +1264,8 @@
             state.currentMatchUserId = null;
             state.unreadCount = 0;
             state.matchIsOnline = true;
+            state.isAiChat = false;
+            if (state.aiTimeout) { clearTimeout(state.aiTimeout); state.aiTimeout = null; }
             updateUnreadBadge();
             matchBadge.style.display = 'none';
             statusText.textContent = 'ready';
@@ -1410,6 +1434,117 @@
         function stopHeartbeat() {
             if (state.heartbeatInterval) { clearInterval(state.heartbeatInterval); state.heartbeatInterval = null; }
             if (state.presenceInterval) { clearInterval(state.presenceInterval); state.presenceInterval = null; }
+        }
+
+        // ======================= AI CHAT BOT =======================
+        const aiBot = {
+            name: '',
+            personality: '',
+            interests: [],
+            msgCount: 0,
+            
+            init(userAboutMe, userLookingFor) {
+                this.msgCount = 0;
+                const names = ['skywalker99','vibecheck','niteowl','chill_pill','moonbeam','stargazer','random_human','late_nite','good_times','wanderer'];
+                this.name = names[Math.floor(Math.random() * names.length)];
+                
+                const personalities = [
+                    {style: 'chill', openers: ['heyyy','yo whats good','sup','hey there lol'], traits: 'laid back and curious'},
+                    {style: 'hyper', openers: ['omggg hi!!','YOOO','hiii ok so','wait hi hello'], traits: 'excited and talkative'},
+                    {style: 'deep', openers: ['hey.','hi, interesting profile','hey so real talk','yo been thinking lately'], traits: 'thoughtful and a bit philosophical'}
+                ];
+                const p = personalities[Math.floor(Math.random() * personalities.length)];
+                this.personality = p;
+                this.interests = userAboutMe.toLowerCase().split(/[\s,]+/).filter(w => w.length > 3);
+                return p.openers[Math.floor(Math.random() * p.openers.length)];
+            },
+
+            respond(userMsg) {
+                this.msgCount++;
+                const msg = userMsg.toLowerCase();
+                const delay = 800 + Math.random() * 2500;
+                
+                const vibes = {
+                    greetings: {match: /^(hey|hi|hello|sup|yo|whats up|heyy)/,
+                        r: ['ayyy','heyy whats good','yoo','hiiii','oh hey!','well hello lol']},
+                    questions: {match: /\?$/,
+                        r: ['hmm good question lol','honestly idk','thats a tough one','lmaooo why do u ask','wait actually yeah','haha uhhh']},
+                    lol: {match: /(lol|lmao|haha|rofl|dead|dying)/,
+                        r: ['lmaooo','hahahah fr','im dead','lolol stop','bruhh','nooo haha']},
+                    music: {match: /(music|song|album|playlist|band|rap|rock)/,
+                        r: ['ok but whats ur top 3 rn','taste in music says everything abt a person','yoo same i been on a music kick lately','what genre tho','banger taste honestly']},
+                    gaming: {match: /(game|gaming|play|xbox|ps5|pc|switch|fortnite|cod)/,
+                        r: ['whatchu play tho','gaming is elite fr','ok but r u actually good lol','valid valid','yooo what platform']},
+                    movies: {match: /(movie|film|show|netflix|watch|series|anime)/,
+                        r: ['ok what should i watch next tho','binge watching anything rn?','taste??','lol i need recs honestly','ohhh whatd u think of it']},
+                    food: {match: /(food|eat|pizza|hungry|cooking|restaurant)/,
+                        r: ['im so hungry rn actually','food takes r important','ok but pizza or tacos','valid food opinion','lol mood']},
+                    agree: {match: /(yeah|yea|yes|true|facts|fr|right|exactly|same)/,
+                        r: ['right?? like fr','exactly lol','big facts','sameeee','literally tho','no cap']},
+                    disagree: {match: /(no|nah|nope|wrong|disagree|cap)/,
+                        r: ['wait really?? lol','ok ok i see u','fair enough','hmm hot take','lol agree to disagree']},
+                    feelings: {match: /(feel|sad|happy|bored|tired|lonely|vibe)/,
+                        r: ['i feel that honestly','mood fr','that hits different','lowkey same tho','vibes','real talk tho']},
+                    sports: {match: /(sport|ball|football|basketball|soccer|nba|nfl)/,
+                        r: ['who u got tho','sports takes go crazy','ok but whos ur team','valid take','lol spicy opinion']},
+                };
+                
+                for (const [key, val] of Object.entries(vibes)) {
+                    if (val.match.test(msg)) {
+                        return {text: val.r[Math.floor(Math.random() * val.r.length)], delay};
+                    }
+                }
+                
+                // Fallback responses based on message count
+                const fallbacks = [
+                    ['so what brings u to talky','tell me something random abt u','ok but whats ur vibe rn'],
+                    ['thats cool honestly','oh word?','huh interesting lol','wait say more'],
+                    ['lol i like ur energy','ur fun to talk to ngl','ok ok i see u','haha valid'],
+                    ['so whats the move tonight','u always this interesting or','what else u into'],
+                    ['honestly this convo is vibes','lol ok ur cool','im glad we matched ngl']
+                ];
+                const bucket = Math.min(Math.floor(this.msgCount / 2), fallbacks.length - 1);
+                const fb = fallbacks[bucket];
+                return {text: fb[Math.floor(Math.random() * fb.length)], delay};
+            }
+        };
+
+        function startAiChat() {
+            state.isAiChat = true;
+            state.currentMatchId = 'ai-' + Date.now();
+            state.currentMatchUserId = 'ai-bot';
+            state.matchScore = 0.6 + Math.random() * 0.35;
+            
+            const aboutMe = aboutMeInput.value.trim();
+            const lookingFor = lookingForInput.value.trim();
+            const opener = aiBot.init(aboutMe, lookingFor);
+            
+            startChat();
+            
+            // Send opener after short delay
+            setTimeout(() => {
+                displayMessage({
+                    sender_id: 'ai-bot',
+                    text: opener,
+                    created_at: new Date().toISOString()
+                });
+            }, 1500 + Math.random() * 1500);
+        }
+
+        function handleAiResponse(userText) {
+            if (!state.isAiChat) return;
+            const {text, delay} = aiBot.respond(userText);
+            
+            // Show typing indicator briefly
+            statusText.textContent = 'typing...';
+            setTimeout(() => {
+                displayMessage({
+                    sender_id: 'ai-bot',
+                    text: text,
+                    created_at: new Date().toISOString()
+                });
+                statusText.textContent = 'chatting';
+            }, delay);
         }
 
         // ======================= UTILITY FUNCTIONS =======================
